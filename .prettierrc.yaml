@@ -1,0 +1,17 @@
+arrowParens: avoid
+bracketSpacing: true
+endOfLine: auto
+importOrder: ["<THIRD_PARTY_MODULES>", "^[./]"]
+importOrderParserPlugins: ["typescript"]
+importOrderSeparation: true
+importOrderSortSpecifiers: true
+printWidth: 140
+singleQuote: false
+tabWidth: 2
+trailingComma: all
+explicitTypes: "always"
+
+overrides:
+  - files: "*.sol"
+    options:
+      tabWidth: 4
