@@ -2,6 +2,7 @@ pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "hardhat/console.sol";
 
 contract RugRace is Ownable {
     using Counters for Counters.Counter;
@@ -24,6 +25,7 @@ contract RugRace is Ownable {
         uint256 funding;
         uint256 fundingPerPod;
         uint256 bonus;
+        uint256 podsRemaining;
         bool finalized;
     }
 
@@ -38,6 +40,9 @@ contract RugRace is Ownable {
     mapping(address => uint256) public userToClaimable;
 
     uint256 public constant MIN_DURATION = 30 minutes;
+    uint256 public constant MAX_POD_NUMBER = 50;
+
+    // ----- Modifiers -----
 
     modifier noGameActive() {
         require(block.timestamp >= gameToGameInfo[gameId.current()].endTime, "!ended");
@@ -57,23 +62,30 @@ contract RugRace is Ownable {
         _;
     }
 
+    // ----- Construction -----
+
     constructor() {
         // So we can start the first game
         gameToGameInfo[0].finalized = true;
     }
+
+    // ----- Owner Functions -----
 
     function startGame(
         address[] memory _participants,
         uint128 _startTime,
         uint128 _endTime,
         uint256 _podNum,
+        uint256 _funding,
         uint256 _bonus
     ) external payable onlyOwner noGameActive finalized {
         require(_endTime > _startTime + MIN_DURATION, "!duration");
+        require(_startTime >= block.timestamp, "!future");
         require(_participants.length % _podNum == 0, "!even");
+        require(_podNum <= MAX_POD_NUMBER, "!podNum");
 
-        // STUB - ensure funding adequate
-        // STUB - ensure bonus appropriate
+        require(_funding > 0, "!funding");
+        require(msg.value == _funding + _bonus, "!value");
 
         gameId.increment();
         uint256 currentGame = gameId.current();
@@ -85,9 +97,10 @@ contract RugRace is Ownable {
         params.podNum = _podNum;
         params.podSize = podSize;
         params.numParticipants = _participants.length;
-        params.funding = msg.value;
-        params.fundingPerPod = msg.value / _podNum;
+        params.funding = _funding;
+        params.fundingPerPod = _funding / _podNum;
         params.bonus = _bonus;
+        params.podsRemaining = _podNum;
 
         _participants = shuffle(_participants);
 
@@ -118,15 +131,18 @@ contract RugRace is Ownable {
         uint256 currentGame = gameId.current();
         GameInfo storage game = gameToGameInfo[currentGame];
 
-        // Determine if any pods have not rugged
+        // Determine the number of pods have not rugged
         uint256 numPods = game.podNum;
-        uint256[] memory unruggedPods;
-        uint256 j;
-        for (uint256 i = 1; 1 <= numPods; ) {
+        uint256 numUnrugged = game.podsRemaining;
+
+        // Record the pod numbers
+        uint256 counter;
+        uint256[] memory unruggedPods = new uint256[](numUnrugged);
+        for (uint256 i = 1; i <= numPods; ) {
             if (gameToPodToPodInfo[currentGame][i].rugTime == 0) {
-                unruggedPods[j] = i;
+                unruggedPods[counter] = i;
                 unchecked {
-                    ++j;
+                    ++counter;
                 }
             }
             unchecked {
@@ -135,15 +151,19 @@ contract RugRace is Ownable {
         }
 
         // Distribute bonuses to unrugged pods, if any
-        uint256 availableBonus = calculateBonus(currentGame);
-        uint256 bonusPerPod = unruggedPods.length > 0 ? availableBonus / unruggedPods.length : 0;
-
-        for (uint256 i = 0; i < unruggedPods.length; ) {
-            distributeBonus(currentGame, unruggedPods[i], bonusPerPod);
+        uint256 bonusPerPod = numUnrugged > 0 ? game.bonus / numUnrugged : 0;
+        if (bonusPerPod > 0) {
+            for (uint256 i = 0; i < numUnrugged; ) {
+                distributeBonus(currentGame, unruggedPods[i], bonusPerPod);
+                unchecked {
+                    ++i;
+                }
+            }
         }
 
         // Withdraw leftover funds to owner
-        uint256 leftovers = gameToUnusedFunds[currentGame];
+        uint256 leftovers = gameToUnusedFunds[currentGame] + game.fundingPerPod * numUnrugged;
+        gameToUnusedFunds[currentGame] = 0;
         payable(owner()).transfer(leftovers);
 
         // Finalize the game
@@ -160,11 +180,16 @@ contract RugRace is Ownable {
         require(pod > 0, "!player");
 
         PodInfo storage podInfo = gameToPodToPodInfo[currentGame][pod];
+        require(podInfo.rugTime == 0, "!ruggable");
+
         podInfo.rugTime = block.timestamp;
         podInfo.rugger = msg.sender;
 
+        GameInfo storage game = gameToGameInfo[currentGame];
+        game.podsRemaining--;
+
         uint256 payout = currentPayout();
-        uint256 leftovers = gameToGameInfo[currentGame].fundingPerPod - payout;
+        uint256 leftovers = game.fundingPerPod - payout;
         gameToUnusedFunds[currentGame] += leftovers;
 
         userToClaimable[msg.sender] += payout;
@@ -172,23 +197,9 @@ contract RugRace is Ownable {
         // STUB - Emit events
     }
 
-    function distributeBonus(
-        uint256 _gameId,
-        uint256 _podId,
-        uint256 _amount
-    ) internal {
-        address[] memory members = gameToPodToPodInfo[_gameId][_podId].participants;
-
-        uint256 payoutPerUser = _amount / members.length;
-        for (uint256 i; i < members.length; ) {
-            userToClaimable[members[i]] += payoutPerUser;
-            // STUB - Emit Event
-        }
-        // STUB - Emit Events
-    }
-
     function claim() external {
         uint256 amount = userToClaimable[msg.sender];
+        require(amount > 0, "!amount");
         userToClaimable[msg.sender] = 0;
         payable(msg.sender).transfer(amount);
         // STUB - emit event
@@ -201,17 +212,34 @@ contract RugRace is Ownable {
         return _participants;
     }
 
+    function distributeBonus(
+        uint256 _gameId,
+        uint256 _podId,
+        uint256 _amount
+    ) internal {
+        address[] memory members = gameToPodToPodInfo[_gameId][_podId].participants;
+
+        uint256 len = members.length;
+        uint256 payoutPerUser = _amount / len;
+        for (uint256 i; i < len; ++i) {
+            userToClaimable[members[i]] += payoutPerUser;
+            // STUB - Emit Event
+        }
+        // STUB - Emit Events
+    }
+
     // ----- View Functions -----
 
     function currentPayout() public view returns (uint256) {
         uint256 currentGame = gameId.current();
         GameInfo storage params = gameToGameInfo[currentGame];
-        uint256 timeElapsed = block.timestamp > params.startTime ? block.timestamp - params.startTime : 0;
-        return (timeElapsed**2) / 3600; //TODO: Parametrize this
+
+        return params.fundingPerPod / 10;
+        // uint256 timeElapsed = block.timestamp > params.startTime ? block.timestamp - params.startTime : 0;
+        // return (timeElapsed**2) / 3600; //TODO: Parametrize this
     }
 
-    function calculateBonus(uint256 _gameId) public view returns (uint256) {
-        // STUB - Calculate bonus amount
-        return 1 ether;
+    function getParticipatedGames(address _user) external view returns (uint256[] memory) {
+        return userToGamesParticipated[_user];
     }
 }
