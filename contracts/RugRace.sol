@@ -6,6 +6,16 @@ import "hardhat/console.sol";
 
 contract RugRace is Ownable {
     using Counters for Counters.Counter;
+
+    // ----- Events -----
+
+    event GameStarted(uint256 indexed _gameId, uint128 _startTime, uint128 _endTime, uint256 _podNum, uint256 _funding, uint256 _bonus);
+    event GameFinalized(uint256 indexed _gameId, uint256 _numRugged, uint256 _numUnrugged, uint256 _leftover, address _recipient);
+    event UserAddedToPod(uint256 indexed _gameId, uint256 indexed _podId, address indexed _user);
+    event Rug(uint256 indexed _gameId, uint256 indexed _podId, address _rugger, uint256 _rugTime, uint256 _amount);
+    event BonusDistributed(uint256 indexed _gameId, uint256 indexed _podId, address indexed _user, uint256 _amount);
+    event Claim(address indexed _user, uint256 _amount);
+
     // ----- State Variables -----
     Counters.Counter private gameId;
 
@@ -113,7 +123,7 @@ contract RugRace is Ownable {
                 userToGameToPod[_participants[i]][currentGame] = pod;
                 podInfo.participants.push(_participants[i]);
 
-                // STUB - emit event
+                emit UserAddedToPod(currentGame, pod, _participants[i]);
 
                 unchecked {
                     ++i;
@@ -124,7 +134,7 @@ contract RugRace is Ownable {
             }
         }
 
-        // STUB - Emit event
+        emit GameStarted(currentGame, _startTime, _endTime, _podNum, _funding, _bonus);
     }
 
     function closeout() external onlyOwner noGameActive {
@@ -169,7 +179,7 @@ contract RugRace is Ownable {
         // Finalize the game
         game.finalized = true;
 
-        // STUB - Event
+        emit GameFinalized(currentGame, numPods - numUnrugged, numUnrugged, leftovers, owner());
     }
 
     // ----- Public Functions -----
@@ -194,7 +204,7 @@ contract RugRace is Ownable {
 
         userToClaimable[msg.sender] += payout;
 
-        // STUB - Emit events
+        emit Rug(currentGame, pod, msg.sender, block.timestamp, payout);
     }
 
     function claim() external {
@@ -202,7 +212,7 @@ contract RugRace is Ownable {
         require(amount > 0, "!amount");
         userToClaimable[msg.sender] = 0;
         payable(msg.sender).transfer(amount);
-        // STUB - emit event
+        emit Claim(msg.sender, amount);
     }
 
     // ----- Internal Functions -----
@@ -223,9 +233,8 @@ contract RugRace is Ownable {
         uint256 payoutPerUser = _amount / len;
         for (uint256 i; i < len; ++i) {
             userToClaimable[members[i]] += payoutPerUser;
-            // STUB - Emit Event
+            emit BonusDistributed(_gameId, _podId, members[i], payoutPerUser);
         }
-        // STUB - Emit Events
     }
 
     // ----- View Functions -----
