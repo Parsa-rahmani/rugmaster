@@ -81,13 +81,24 @@ contract RugRace is Ownable {
 
     // ----- Owner Functions -----
 
+    /**
+     * @notice  Starts a new game
+     * @param   _participants   Array of participants in the game
+     * @param   _startTime      Start time in Unix Epoch seconds
+     * @param   _endTime        End time in Unix Epoch seconds
+     * @param   _podNum         Number of pods in the game
+     * @param   _funding        Ether value provided as funding for pods
+     * @param   _bonus          Ether value distributed among unrugged pods
+     * @param   _seed           Seed for randomness
+     */
     function startGame(
         address[] memory _participants,
         uint128 _startTime,
         uint128 _endTime,
         uint256 _podNum,
         uint256 _funding,
-        uint256 _bonus
+        uint256 _bonus,
+        uint256 _seed
     ) external payable onlyOwner noGameActive finalized {
         require(_endTime > _startTime + MIN_DURATION, "!duration");
         require(_startTime >= block.timestamp, "!future");
@@ -112,7 +123,7 @@ contract RugRace is Ownable {
         params.bonus = _bonus;
         params.podsRemaining = _podNum;
 
-        _participants = shuffle(_participants);
+        _participants = shuffle(_participants, _seed);
 
         gameToParticipants[currentGame] = _participants;
 
@@ -217,9 +228,31 @@ contract RugRace is Ownable {
 
     // ----- Internal Functions -----
 
-    // STUB - make it actually shuffle later
-    function shuffle(address[] memory _participants) internal view returns (address[] memory) {
-        return _participants;
+    /**
+     * @dev     Shuffles an array. Based on: https://ethereum.stackexchange.com/questions/134023/shuffle-array-mapping
+     */
+    function shuffle(address[] memory _array, uint256 _seed) internal pure returns (address[] memory) {
+        uint256 counter = 0;
+        uint256 j = 0;
+        bytes32 b32 = keccak256(abi.encodePacked(_seed, counter));
+        uint256 length = _array.length;
+
+        for (uint256 i = 0; i < _array.length; i++) {
+            if (j > 31) {
+                b32 = keccak256(abi.encodePacked(_seed, ++counter));
+                j = 0;
+            }
+
+            uint8 value = uint8(b32[j++]);
+
+            uint256 n = value % length;
+
+            address temp = _array[n];
+            _array[n] = _array[i];
+            _array[i] = temp;
+        }
+
+        return _array;
     }
 
     function distributeBonus(
