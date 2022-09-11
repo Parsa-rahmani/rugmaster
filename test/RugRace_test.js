@@ -84,23 +84,23 @@ describe("Rug Race", function () {
       await race
         .connect(devWallet)
         .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
-      await network.provider.send("evm_increaseTime", [60]);
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
 
       expect(await race.userToClaimable(citizen1.address)).to.eq(0);
       expect(await race.connect(citizen1).rug())
         .to.emit(race, "Rug")
-        .withArgs(1, 3, citizen1.address, startTime + 59, ethers.utils.parseEther("0.1"));
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+        .withArgs(1, 3, citizen1.address, startTime + 60, 277777777777777);
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
     });
 
     it("Should not allow rugging the same pod twice", async function () {
       await race
         .connect(devWallet)
         .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
-      await network.provider.send("evm_increaseTime", [60]);
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
 
       await race.connect(citizen1).rug();
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
       await expect(race.connect(citizen1).rug()).to.be.revertedWith("!ruggable");
     });
 
@@ -117,7 +117,7 @@ describe("Rug Race", function () {
       await race
         .connect(devWallet)
         .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
-      await network.provider.send("evm_increaseTime", [60]);
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
 
       expect(await race.userToGameToPod(citizen1.address, 1)).to.eq(3);
       expect(await race.userToGameToPod(citizen2.address, 1)).to.eq(1);
@@ -128,12 +128,12 @@ describe("Rug Race", function () {
 
       expect(await race.userToClaimable(citizen1.address)).to.eq(0);
       await race.connect(citizen1).rug();
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
 
       await network.provider.send("evm_increaseTime", [3600]);
 
-      expect(await race.connect(devWallet).closeout()).to.changeEtherBalance(devWallet, ethers.utils.parseEther("2.9"));
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      expect(await race.connect(devWallet).closeout()).to.changeEtherBalance(devWallet, ethers.utils.parseEther("3").sub(277777777777777));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
       expect(await race.userToClaimable(citizen2.address)).to.eq(ethers.utils.parseEther("0.25"));
       expect(await race.userToClaimable(citizen3.address)).to.eq(0);
       expect(await race.userToClaimable(citizen4.address)).to.eq(ethers.utils.parseEther("0.25"));
@@ -161,7 +161,6 @@ describe("Rug Race", function () {
       await race
         .connect(devWallet)
         .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
-      await network.provider.send("evm_increaseTime", [60]);
 
       expect(await network.provider.send("eth_getBalance", [race.address])).to.eq("0x3782dace9d900000");
 
@@ -186,10 +185,11 @@ describe("Rug Race", function () {
       expect(await race.userToClaimable(citizen5.address)).to.eq(0);
       expect(await race.userToClaimable(citizen6.address)).to.eq(0);
 
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
       await race.connect(citizen1).rug();
       await network.provider.send("evm_increaseTime", [3600]);
 
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
       expect(await race.userToClaimable(citizen2.address)).to.eq(0);
       expect(await race.userToClaimable(citizen3.address)).to.eq(0);
       expect(await race.userToClaimable(citizen4.address)).to.eq(0);
@@ -198,7 +198,7 @@ describe("Rug Race", function () {
 
       expect(await race.connect(devWallet).closeout())
         .to.emit(race, "GameFinalized")
-        .withArgs(1, 1, 2, ethers.utils.parseEther("2.9"), devWallet.address);
+        .withArgs(1, 1, 2, ethers.utils.parseEther("3").sub(277777777777777), devWallet.address);
 
       expect((await race.userToGamesParticipated(citizen1.address, 0)).toString()).to.eq("1");
       expect((await race.userToGamesParticipated(citizen2.address, 0)).toString()).to.eq("1");
@@ -214,14 +214,14 @@ describe("Rug Race", function () {
       expect(await race.userToGameToPod(citizen5.address, 1)).to.eq(2);
       expect(await race.userToGameToPod(citizen6.address, 1)).to.eq(2);
 
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
       expect(await race.userToClaimable(citizen2.address)).to.eq(ethers.utils.parseEther("0.25"));
       expect(await race.userToClaimable(citizen3.address)).to.eq(0);
       expect(await race.userToClaimable(citizen4.address)).to.eq(ethers.utils.parseEther("0.25"));
       expect(await race.userToClaimable(citizen5.address)).to.eq(ethers.utils.parseEther("0.25"));
       expect(await race.userToClaimable(citizen6.address)).to.eq(ethers.utils.parseEther("0.25"));
 
-      expect(await race.connect(citizen1).claim()).to.changeEtherBalance(citizen1, ethers.utils.parseEther("0.1"));
+      expect(await race.connect(citizen1).claim()).to.changeEtherBalance(citizen1, 277777777777777);
       expect(await race.connect(citizen2).claim()).to.changeEtherBalance(citizen2, ethers.utils.parseEther("0.25"));
       await expect(race.connect(citizen3).claim()).to.be.revertedWith("!amount");
       expect(await race.connect(citizen4).claim()).to.changeEtherBalance(citizen4, ethers.utils.parseEther("0.25"));
@@ -266,7 +266,6 @@ describe("Rug Race", function () {
       )
         .to.emit(race, "UserAddedToPod")
         .withArgs(2, 3, citizen1.address);
-      await network.provider.send("evm_increaseTime", [60]);
 
       expect(await network.provider.send("eth_getBalance", [race.address])).to.eq("0x3782dace9d900000");
 
@@ -291,10 +290,12 @@ describe("Rug Race", function () {
       expect(await race.userToClaimable(citizen5.address)).to.eq(0);
       expect(await race.userToClaimable(citizen6.address)).to.eq(0);
 
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
+
       await race.connect(citizen1).rug();
       await network.provider.send("evm_increaseTime", [3600]);
 
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
       expect(await race.userToClaimable(citizen2.address)).to.eq(0);
       expect(await race.userToClaimable(citizen3.address)).to.eq(0);
       expect(await race.userToClaimable(citizen4.address)).to.eq(0);
@@ -319,7 +320,7 @@ describe("Rug Race", function () {
       expect(await race.userToGameToPod(citizen5.address, 2)).to.eq(2);
       expect(await race.userToGameToPod(citizen6.address, 2)).to.eq(2);
 
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
       expect(await race.userToClaimable(citizen2.address)).to.eq(ethers.utils.parseEther("0.25"));
       expect(await race.userToClaimable(citizen3.address)).to.eq(0);
       expect(await race.userToClaimable(citizen4.address)).to.eq(ethers.utils.parseEther("0.25"));
@@ -328,7 +329,7 @@ describe("Rug Race", function () {
 
       expect(await race.connect(citizen1).claim())
         .to.emit(race, "Claim")
-        .withArgs(citizen1.address, ethers.utils.parseEther("0.1"));
+        .withArgs(citizen1.address, 277777777777777);
       expect(await race.connect(citizen2).claim())
         .to.emit(race, "Claim")
         .withArgs(citizen2.address, ethers.utils.parseEther("0.25"));
@@ -357,13 +358,36 @@ describe("Rug Race", function () {
       await race
         .connect(devWallet)
         .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
-      await network.provider.send("evm_increaseTime", [60]);
 
       expect(await race.userToClaimable(citizen1.address)).to.eq(0);
-      await race.connect(citizen1).rug();
-      expect(await race.userToClaimable(citizen1.address)).to.eq(ethers.utils.parseEther("0.1"));
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
 
-      expect(await race.connect(citizen1).claim()).to.changeEtherBalance(citizen1, ethers.utils.parseEther("0.1"));
+      await race.connect(citizen1).rug();
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
+
+      expect(await race.connect(citizen1).claim()).to.changeEtherBalance(citizen1, 277777777777777);
+    });
+
+    it("Should calculate the correct rug payout", async function () {
+      await race
+        .connect(devWallet)
+        .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
+
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
+      await network.provider.send("evm_mine");
+      expect(await race.currentPayout()).to.eq(277777777777777);
+
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 1800]);
+      await network.provider.send("evm_mine");
+      expect(await race.currentPayout()).to.eq(ethers.utils.parseEther("0.25"));
+
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 3600]);
+      await network.provider.send("evm_mine");
+      expect(await race.currentPayout()).to.eq(ETHER_ONE);
+
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 7200]);
+      await network.provider.send("evm_mine");
+      expect(await race.currentPayout()).to.eq(ETHER_ONE);
     });
   });
 });

@@ -276,9 +276,15 @@ contract RugRace is Ownable {
         uint256 currentGame = gameId.current();
         GameInfo storage params = gameToGameInfo[currentGame];
 
-        return params.fundingPerPod / 10;
-        // uint256 timeElapsed = block.timestamp > params.startTime ? block.timestamp - params.startTime : 0;
-        // return (timeElapsed**2) / 3600; //TODO: Parametrize this
+        uint256 timeElapsed = block.timestamp > params.startTime ? block.timestamp - params.startTime : 0;
+        uint256 gameDuration = params.endTime - params.startTime;
+        uint256 fundingPerPod = params.fundingPerPod;
+
+        if (timeElapsed >= gameDuration) {
+            return fundingPerPod;
+        }
+
+        return (fundingPerPod * (timeElapsed**2)) / (gameDuration**2);
     }
 
     function getParticipatedGames(address _user) external view returns (uint256[] memory) {
