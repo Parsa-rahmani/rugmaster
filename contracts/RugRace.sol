@@ -19,8 +19,6 @@ contract RugRace is Ownable {
     // ----- State Variables -----
     Counters.Counter private gameId;
 
-    mapping(uint256 => mapping(uint256 => uint256)) public gameToPodToTimeRugged;
-
     mapping(uint256 => address[]) public gameToParticipants;
     mapping(uint256 => GameInfo) public gameToGameInfo;
     mapping(uint256 => mapping(uint256 => PodInfo)) public gameToPodToPodInfo;
@@ -111,17 +109,17 @@ contract RugRace is Ownable {
         gameId.increment();
         uint256 currentGame = gameId.current();
 
-        GameInfo storage params = gameToGameInfo[currentGame];
+        GameInfo storage gameInfo = gameToGameInfo[currentGame];
         uint256 podSize = _participants.length / _podNum;
-        params.startTime = _startTime;
-        params.endTime = _endTime;
-        params.podNum = _podNum;
-        params.podSize = podSize;
-        params.numParticipants = _participants.length;
-        params.funding = _funding;
-        params.fundingPerPod = _funding / _podNum;
-        params.bonus = _bonus;
-        params.podsRemaining = _podNum;
+        gameInfo.startTime = _startTime;
+        gameInfo.endTime = _endTime;
+        gameInfo.podNum = _podNum;
+        gameInfo.podSize = podSize;
+        gameInfo.numParticipants = _participants.length;
+        gameInfo.funding = _funding;
+        gameInfo.fundingPerPod = _funding / _podNum;
+        gameInfo.bonus = _bonus;
+        gameInfo.podsRemaining = _podNum;
 
         _participants = shuffle(_participants, _seed);
 
@@ -274,17 +272,50 @@ contract RugRace is Ownable {
 
     function currentPayout() public view returns (uint256) {
         uint256 currentGame = gameId.current();
-        GameInfo storage params = gameToGameInfo[currentGame];
+        GameInfo storage gameInfo = gameToGameInfo[currentGame];
 
-        uint256 timeElapsed = block.timestamp > params.startTime ? block.timestamp - params.startTime : 0;
-        uint256 gameDuration = params.endTime - params.startTime;
-        uint256 fundingPerPod = params.fundingPerPod;
+        uint256 timeElapsed = block.timestamp > gameInfo.startTime ? block.timestamp - gameInfo.startTime : 0;
+        uint256 gameDuration = gameInfo.endTime - gameInfo.startTime;
+        uint256 fundingPerPod = gameInfo.fundingPerPod;
 
         if (timeElapsed >= gameDuration) {
             return fundingPerPod;
         }
 
         return (fundingPerPod * (timeElapsed**2)) / (gameDuration**2);
+    }
+
+    function currentTimeElapsed() public view returns (uint256) {
+        GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
+
+        uint256 timeElapsed = block.timestamp > gameInfo.startTime ? block.timestamp - gameInfo.startTime : 0;
+        uint256 gameDuration = gameInfo.endTime - gameInfo.startTime;
+
+        return timeElapsed >= gameDuration ? gameDuration : timeElapsed;
+    }
+
+    function currentBonusPerPlayer() external view returns (uint256) {
+        GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
+
+        return gameInfo.podsRemaining > 0 ? gameInfo.bonus / gameInfo.podsRemaining / gameInfo.podSize : 0;
+    }
+
+    function currentRugStatus(uint256 _pod) external view returns (uint256, address) {
+        PodInfo storage pod = gameToPodToPodInfo[gameId.current()][_pod];
+        return (pod.rugTime, pod.rugger);
+    }
+
+    function currentRuggedPodsInfo() external view returns (uint256, uint256) {
+        GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
+        return (gameInfo.podNum - gameInfo.podsRemaining, gameInfo.podsRemaining);
+    }
+
+    function currentGameInfo() external view returns (GameInfo memory) {
+        return gameToGameInfo[gameId.current()];
+    }
+
+    function currentPodByUser(address _user) external view returns (uint256) {
+        return userToGameToPod[_user][gameId.current()];
     }
 
     function getParticipatedGames(address _user) external view returns (uint256[] memory) {
