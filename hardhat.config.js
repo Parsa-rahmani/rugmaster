@@ -21,19 +21,23 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  solidity: "0.8.13",
+  solidity: {
+    version: "0.8.15",
+    settings: {
+      optimizer: {
+        runs: 200,
+        enabled: true,
+      },
+    },
+  },
   networks: {
     goerli: {
       url: process.env.GOERLI_URL || "",
-      accounts: process.env.PRIVATE_KEY
-        ? [`${process.env.PRIVATE_KEY}`]
-        : ["0x0000000000000000000000000000000000000000"],
+      accounts: process.env.PRIVATE_KEY ? [`${process.env.PRIVATE_KEY}`] : ["0x0000000000000000000000000000000000000000"],
     },
     mainnet: {
       url: process.env.MAINNET_URL || "",
-      accounts: process.env.PRIVATE_KEY
-        ? [`${process.env.PRIVATE_KEY}`]
-        : ["0x0000000000000000000000000000000000000000"],
+      accounts: process.env.PRIVATE_KEY ? [`${process.env.PRIVATE_KEY}`] : ["0x0000000000000000000000000000000000000000"],
     },
   },
   etherscan: {

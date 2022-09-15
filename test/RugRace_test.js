@@ -39,9 +39,9 @@ describe("Rug Race", function () {
     it("Should NOT start a new game with improper parameters", async function () {
       // Game must start in the future
       await expect(
-        race
-          .connect(devWallet)
-          .startGame(participants, 0, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) }),
+        race.connect(devWallet).startGame(participants, startTime - 60, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, {
+          value: ETHER_ONE.mul(4),
+        }),
       ).to.be.revertedWith("!future");
 
       // Duration too short
@@ -49,6 +49,13 @@ describe("Rug Race", function () {
         race
           .connect(devWallet)
           .startGame(participants, startTime, startTime, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) }),
+      ).to.be.revertedWith("!duration");
+
+      // Duration too long
+      await expect(
+        race.connect(devWallet).startGame(participants, startTime + 10, startTime + gameLength * 10, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, {
+          value: ETHER_ONE.mul(4),
+        }),
       ).to.be.revertedWith("!duration");
 
       // Participants array divides evenly by pod number

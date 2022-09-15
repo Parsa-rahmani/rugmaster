@@ -34,6 +34,9 @@ contract RugRace is Ownable {
         uint256 fundingPerPod;
         uint256 bonus;
         uint256 podsRemaining;
+        uint256 intermissionsRemaining;
+        uint128 intermissionStartTime;
+        uint128 intermissionEndTime;
         bool finalized;
     }
 
@@ -47,8 +50,11 @@ contract RugRace is Ownable {
     mapping(address => mapping(uint256 => uint256)) public userToGameToPod;
     mapping(address => uint256) public userToClaimable;
 
-    uint256 public constant MIN_DURATION = 30 minutes;
+    uint256 public constant MIN_GAME_DURATION = 20 minutes;
+    uint256 public constant MAX_GAME_DURATION = 3 hours;
     uint256 public constant MAX_POD_NUMBER = 50;
+    uint256 public constant MAX_INTERMISSIONS = 2;
+    uint256 public constant MAX_INTERMISSION_DURATION = 10 minutes;
 
     // ----- Modifiers -----
 
@@ -98,7 +104,7 @@ contract RugRace is Ownable {
         uint256 _bonus,
         uint256 _seed
     ) external payable onlyOwner noGameActive finalized {
-        require(_endTime > _startTime + MIN_DURATION, "!duration");
+        require(_endTime > _startTime + MIN_GAME_DURATION && _endTime <= _startTime + MAX_GAME_DURATION, "!duration");
         require(_startTime >= block.timestamp, "!future");
         require(_participants.length % _podNum == 0, "!even");
         require(_podNum <= MAX_POD_NUMBER, "!podNum");
@@ -120,6 +126,7 @@ contract RugRace is Ownable {
         gameInfo.fundingPerPod = _funding / _podNum;
         gameInfo.bonus = _bonus;
         gameInfo.podsRemaining = _podNum;
+        gameInfo.intermissionsRemaining = MAX_INTERMISSIONS;
 
         _participants = shuffle(_participants, _seed);
 
@@ -191,6 +198,22 @@ contract RugRace is Ownable {
         emit GameFinalized(currentGame, numPods - numUnrugged, numUnrugged, leftovers, owner());
     }
 
+    function setIntermission(uint128 _startTime, uint128 _endTime) external onlyOwner gameActive {
+        require(_endTime > _startTime && _startTime >= block.timestamp, "!timing");
+        require(_endTime - _startTime <= MAX_INTERMISSION_DURATION, "!duration");
+
+        uint256 currentGame = gameId.current();
+        GameInfo storage game = gameToGameInfo[currentGame];
+
+        require(game.intermissionsRemaining > 0, "!remaining");
+
+        game.intermissionStartTime = _startTime;
+        game.intermissionEndTime = _endTime;
+        game.intermissionsRemaining--;
+
+        // sTUB - Emit
+    }
+
     // ----- Public Functions -----
 
     function rug() external gameActive {
@@ -201,10 +224,12 @@ contract RugRace is Ownable {
         PodInfo storage podInfo = gameToPodToPodInfo[currentGame][pod];
         require(podInfo.rugTime == 0, "!ruggable");
 
+        GameInfo storage game = gameToGameInfo[currentGame];
+        require(block.timestamp >= game.intermissionEndTime || block.timestamp < game.intermissionStartTime, "!intermission");
+
         podInfo.rugTime = block.timestamp;
         podInfo.rugger = msg.sender;
 
-        GameInfo storage game = gameToGameInfo[currentGame];
         game.podsRemaining--;
 
         uint256 payout = currentPayout();
