@@ -319,6 +319,18 @@ contract RugRace is Ownable {
         return timeElapsed >= gameDuration ? gameDuration : timeElapsed;
     }
 
+    function currentGameIntermission() external view returns (uint256, uint256) {
+        GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
+
+        return (gameInfo.intermissionStartTime, gameInfo.intermissionEndTime);
+    }
+
+    function currentIntermissionsRemaining() external view returns (uint256) {
+        GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
+
+        return gameInfo.intermissionsRemaining;
+    }
+
     function currentBonusPerPlayer() external view returns (uint256) {
         GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
 

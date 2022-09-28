@@ -35,6 +35,10 @@ module.exports = {
       url: process.env.GOERLI_URL || "",
       accounts: process.env.PRIVATE_KEY ? [`${process.env.PRIVATE_KEY}`] : ["0x0000000000000000000000000000000000000000"],
     },
+    arb_goerli: {
+      url: process.env.ARBITRUM_GOERLI_URL || "",
+      accounts: process.env.PRIVATE_KEY ? [`${process.env.PRIVATE_KEY}`] : ["0x0000000000000000000000000000000000000000"],
+    },
     mainnet: {
       url: process.env.MAINNET_URL || "",
       accounts: process.env.PRIVATE_KEY ? [`${process.env.PRIVATE_KEY}`] : ["0x0000000000000000000000000000000000000000"],

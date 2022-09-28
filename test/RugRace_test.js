@@ -148,6 +148,114 @@ describe("Rug Race", function () {
       expect(await race.userToClaimable(citizen6.address)).to.eq(ethers.utils.parseEther("0.25"));
     });
 
+    it("Should closeout a game and distribute the bonus among the unrugged pods", async function () {
+      await race
+        .connect(devWallet)
+        .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
+
+      expect(await race.userToGameToPod(citizen1.address, 1)).to.eq(3);
+      expect(await race.userToGameToPod(citizen2.address, 1)).to.eq(1);
+      expect(await race.userToGameToPod(citizen3.address, 1)).to.eq(3);
+      expect(await race.userToGameToPod(citizen4.address, 1)).to.eq(1);
+      expect(await race.userToGameToPod(citizen5.address, 1)).to.eq(2);
+      expect(await race.userToGameToPod(citizen6.address, 1)).to.eq(2);
+
+      expect(await race.userToClaimable(citizen1.address)).to.eq(0);
+      await race.connect(citizen1).rug();
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
+
+      await network.provider.send("evm_increaseTime", [3600]);
+
+      expect(await race.connect(devWallet).closeout()).to.changeEtherBalance(devWallet, ethers.utils.parseEther("3").sub(277777777777777));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(277777777777777);
+      expect(await race.userToClaimable(citizen2.address)).to.eq(ethers.utils.parseEther("0.25"));
+      expect(await race.userToClaimable(citizen3.address)).to.eq(0);
+      expect(await race.userToClaimable(citizen4.address)).to.eq(ethers.utils.parseEther("0.25"));
+      expect(await race.userToClaimable(citizen5.address)).to.eq(ethers.utils.parseEther("0.25"));
+      expect(await race.userToClaimable(citizen6.address)).to.eq(ethers.utils.parseEther("0.25"));
+    });
+
+    it("Should conduct an intermission", async function () {
+      await race
+        .connect(devWallet)
+        .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
+      expect(await race.currentIntermissionsRemaining()).to.eq(2);
+      intermission = await race.currentGameIntermission();
+      expect(intermission[0]).to.eq(0);
+      expect(intermission[1]).to.eq(0);
+
+      await race.connect(devWallet).setIntermission(startTime + 30, startTime + 120);
+
+      intermission = await race.currentGameIntermission();
+      expect(intermission[0]).to.eq(startTime + 30);
+      expect(intermission[1]).to.eq(startTime + 120);
+
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 60]);
+
+      expect(await race.userToGameToPod(citizen1.address, 1)).to.eq(3);
+      expect(await race.userToGameToPod(citizen2.address, 1)).to.eq(1);
+      expect(await race.userToGameToPod(citizen3.address, 1)).to.eq(3);
+      expect(await race.userToGameToPod(citizen4.address, 1)).to.eq(1);
+      expect(await race.userToGameToPod(citizen5.address, 1)).to.eq(2);
+      expect(await race.userToGameToPod(citizen6.address, 1)).to.eq(2);
+
+      expect(await race.userToClaimable(citizen1.address)).to.eq(0);
+      expect(await race.currentIntermissionsRemaining()).to.eq(1);
+
+      await expect(race.connect(citizen1).rug()).to.be.revertedWith("!intermission");
+
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 150]);
+      await race.connect(citizen1).rug();
+      expect(await race.userToClaimable(citizen1.address)).to.eq(1736111111111111);
+
+      await network.provider.send("evm_increaseTime", [3600]);
+
+      expect(await race.connect(devWallet).closeout()).to.changeEtherBalance(devWallet, ethers.utils.parseEther("3").sub(1736111111111111));
+      expect(await race.userToClaimable(citizen1.address)).to.eq(1736111111111111);
+      expect(await race.userToClaimable(citizen2.address)).to.eq(ethers.utils.parseEther("0.25"));
+      expect(await race.userToClaimable(citizen3.address)).to.eq(0);
+      expect(await race.userToClaimable(citizen4.address)).to.eq(ethers.utils.parseEther("0.25"));
+      expect(await race.userToClaimable(citizen5.address)).to.eq(ethers.utils.parseEther("0.25"));
+      expect(await race.userToClaimable(citizen6.address)).to.eq(ethers.utils.parseEther("0.25"));
+    });
+
+    it("Should set intermissions correctly", async function () {
+      await race
+        .connect(devWallet)
+        .startGame(participants, startTime, startTime + gameLength, 3, ETHER_ONE.mul(3), ETHER_ONE, 420, { value: ETHER_ONE.mul(4) });
+      expect(await race.currentIntermissionsRemaining()).to.eq(2);
+      intermission = await race.currentGameIntermission();
+      expect(intermission[0]).to.eq(0);
+      expect(intermission[1]).to.eq(0);
+
+      await race.connect(devWallet).setIntermission(startTime + 30, startTime + 120);
+
+      await network.provider.send("evm_setNextBlockTimestamp", [startTime + 150]);
+      await network.provider.send("evm_mine");
+
+      await expect(race.connect(devWallet).setIntermission(startTime + 10, startTime + 15)).to.be.revertedWith("!timing");
+
+      expect(await race.currentIntermissionsRemaining()).to.eq(1);
+      intermission = await race.currentGameIntermission();
+      expect(intermission[0]).to.eq(startTime + 30);
+      expect(intermission[1]).to.eq(startTime + 120);
+
+      await race.connect(devWallet).setIntermission(startTime + 300, startTime + 400);
+
+      expect(await race.currentIntermissionsRemaining()).to.eq(0);
+      intermission = await race.currentGameIntermission();
+      expect(intermission[0]).to.eq(startTime + 300);
+      expect(intermission[1]).to.eq(startTime + 400);
+
+      await expect(race.connect(devWallet).setIntermission(startTime + 301, startTime + 401)).to.be.revertedWith("!remaining");
+
+      expect(await race.currentIntermissionsRemaining()).to.eq(0);
+      intermission = await race.currentGameIntermission();
+      expect(intermission[0]).to.eq(startTime + 300);
+      expect(intermission[1]).to.eq(startTime + 400);
+    });
+
     it("Should have all the correct view function values across multiple games", async function () {
       expect(await network.provider.send("eth_getBalance", [race.address])).to.eq("0x0");
 
