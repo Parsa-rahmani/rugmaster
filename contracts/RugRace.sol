@@ -4,6 +4,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "hardhat/console.sol";
 
+/**
+ * {website} // {team}
+ * @title   RugRace
+ * @notice  Rug your friends >:D
+ * @author  BowTiedPickle
+ */
 contract RugRace is Ownable {
     using Counters for Counters.Counter;
 
@@ -15,6 +21,7 @@ contract RugRace is Ownable {
     event Rug(uint256 indexed _gameId, uint256 indexed _podId, address _rugger, uint256 _rugTime, uint256 _amount);
     event BonusDistributed(uint256 indexed _gameId, uint256 indexed _podId, address indexed _user, uint256 _amount);
     event Claim(address indexed _user, uint256 _amount);
+    event IntermissionSet(uint256 indexed _gameId, uint128 _startTime, uint128 _endTime);
 
     // ----- State Variables -----
     Counters.Counter private gameId;
@@ -153,6 +160,10 @@ contract RugRace is Ownable {
         emit GameStarted(currentGame, _startTime, _endTime, _podNum, _funding, _bonus);
     }
 
+    /**
+     * @notice  Close out a round
+     * @dev     Performs end of game accounting and enables starting a new match
+     */
     function closeout() external onlyOwner noGameActive {
         uint256 currentGame = gameId.current();
         GameInfo storage game = gameToGameInfo[currentGame];
@@ -198,6 +209,11 @@ contract RugRace is Ownable {
         emit GameFinalized(currentGame, numPods - numUnrugged, numUnrugged, leftovers, owner());
     }
 
+    /**
+     * @notice  Set an intermission period during a game
+     * @param   _startTime  Timestamp (unix epoch seconds) of the intermission start
+     * @param   _endTime    Timestamp (unix epoch seconds) of the intermission end
+     */
     function setIntermission(uint128 _startTime, uint128 _endTime) external onlyOwner gameActive {
         require(_endTime > _startTime && _startTime >= block.timestamp, "!timing");
         require(_endTime - _startTime <= MAX_INTERMISSION_DURATION, "!duration");
@@ -211,11 +227,14 @@ contract RugRace is Ownable {
         game.intermissionEndTime = _endTime;
         game.intermissionsRemaining--;
 
-        // sTUB - Emit
+        emit IntermissionSet(currentGame, _startTime, _endTime);
     }
 
     // ----- Public Functions -----
 
+    /**
+     * @notice  Rug a pod
+     */
     function rug() external gameActive {
         uint256 currentGame = gameId.current();
         uint256 pod = userToGameToPod[msg.sender][currentGame];
@@ -241,6 +260,9 @@ contract RugRace is Ownable {
         emit Rug(currentGame, pod, msg.sender, block.timestamp, payout);
     }
 
+    /**
+     * @notice  Claim all owed winnings
+     */
     function claim() external {
         uint256 amount = userToClaimable[msg.sender];
         require(amount > 0, "!amount");
@@ -257,7 +279,7 @@ contract RugRace is Ownable {
     function shuffle(address[] memory _array, uint256 _seed) internal pure returns (address[] memory) {
         uint256 counter = 0;
         uint256 j = 0;
-        bytes32 b32 = keccak256(abi.encodePacked(_seed, counter));
+        bytes32 b32 = keccak256(abi.encodePacked(_seed, counter)); // TODO: Add block.timestamp to this for extra randomness during deployment
         uint256 length = _array.length;
 
         for (uint256 i = 0; i < _array.length; i++) {
@@ -278,6 +300,9 @@ contract RugRace is Ownable {
         return _array;
     }
 
+    /**
+     * @dev     Pay out all members of a pod
+     */
     function distributeBonus(
         uint256 _gameId,
         uint256 _podId,
@@ -295,6 +320,10 @@ contract RugRace is Ownable {
 
     // ----- View Functions -----
 
+    /**
+     * @notice  View the current rug payout of the round
+     * @return  The Ether receieved for rugging at the current timestamp, denominated in wei
+     */
     function currentPayout() public view returns (uint256) {
         uint256 currentGame = gameId.current();
         GameInfo storage gameInfo = gameToGameInfo[currentGame];
@@ -310,6 +339,10 @@ contract RugRace is Ownable {
         return (fundingPerPod * (timeElapsed**2)) / (gameDuration**2);
     }
 
+    /**
+     * @notice  View the elapsed time in the current round
+     * @return  Seconds elapsed in the current round
+     */
     function currentTimeElapsed() public view returns (uint256) {
         GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
 
@@ -319,42 +352,78 @@ contract RugRace is Ownable {
         return timeElapsed >= gameDuration ? gameDuration : timeElapsed;
     }
 
+    /**
+     * @notice  View the timestamps of the intermission set for the current round
+     * @return  Intermission start time, in unix epoch seconds
+     * @return  Intermission end time, in unix epoch seconds
+     */
     function currentGameIntermission() external view returns (uint256, uint256) {
         GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
 
         return (gameInfo.intermissionStartTime, gameInfo.intermissionEndTime);
     }
 
+    /**
+     * @notice  View the number of intermissions which can still be called in the current round
+     * @return  Number of intermissions which can still be called in the current round
+     */
     function currentIntermissionsRemaining() external view returns (uint256) {
         GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
 
         return gameInfo.intermissionsRemaining;
     }
 
+    /**
+     * @notice  View the bonus per player for not rugging at the current time
+     * @return  Bonus per player for not rugging at the current time, denominated in wei
+     */
     function currentBonusPerPlayer() external view returns (uint256) {
         GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
 
         return gameInfo.podsRemaining > 0 ? gameInfo.bonus / gameInfo.podsRemaining / gameInfo.podSize : 0;
     }
 
+    /**
+     * @notice  View the rug time and rugger of the pod in the current game
+     * @param   _pod    Pod ID
+     * @return  Rug timestamp, in Unix epoch seconds
+     * @return  Address of the rugging party
+     */
     function currentRugStatus(uint256 _pod) external view returns (uint256, address) {
         PodInfo storage pod = gameToPodToPodInfo[gameId.current()][_pod];
         return (pod.rugTime, pod.rugger);
     }
 
+    /**
+     * @notice  View the number of rugged and unrugged pods in the current game
+     * @return  Rug timestamp, in Unix epoch seconds
+     * @return  Address of the rugging party
+     */
     function currentRuggedPodsInfo() external view returns (uint256, uint256) {
         GameInfo storage gameInfo = gameToGameInfo[gameId.current()];
         return (gameInfo.podNum - gameInfo.podsRemaining, gameInfo.podsRemaining);
     }
 
+    /**
+     * @notice  Retrieve the current game information
+     * @return  GameInfo struct
+     */
     function currentGameInfo() external view returns (GameInfo memory) {
         return gameToGameInfo[gameId.current()];
     }
 
+    /**
+     * @notice  View a user's pod in the current game
+     * @return  User's pod in the current game, 0 if not in the game.
+     */
     function currentPodByUser(address _user) external view returns (uint256) {
         return userToGameToPod[_user][gameId.current()];
     }
 
+    /**
+     * @notice  View the games a user has participated in
+     * @return  Array of game IDs the user participated in
+     */
     function getParticipatedGames(address _user) external view returns (uint256[] memory) {
         return userToGamesParticipated[_user];
     }
